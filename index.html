@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Tracker" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <title>Progress Tracker</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body, #root { height: 100%; }
+    body { background: #0A0A0F; color: #E8E8F0; font-family: 'DM Mono', 'Courier New', monospace; overscroll-behavior: none; }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: #0A0A0F; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    button:focus-visible, input:focus-visible { outline: 2px solid #6B8EFF; outline-offset: 2px; }
+    @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes toastIn { from { opacity:0; transform:translateX(110%); } to { opacity:1; transform:translateX(0); } }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    .slide-up { animation: slideUp 0.3s ease both; }
+    .toast-anim { animation: toastIn 0.3s ease; }
+    .fade-in { animation: fadeIn 0.25s ease; }
+    @media (prefers-reduced-motion: reduce) {
+      .slide-up, .toast-anim, .fade-in { animation: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script>
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+const C = {
+  bg: "#0A0A0F", card: "#111", border: "#1a1a1a",
+  text: "#E8E8F0", muted: "#555", dim: "#333",
+};
+
+// ─── RUTINA ACTUALIZADA SEGÚN PDF ────────────────────────────────────
+// optional: true → ejercicio opcional, no cuenta para el progreso de sesión obligatorio
+const ROUTINE = {
+  "Upper A": {
+    day: "Lunes", color: "#FF6B35",
+    exercises: [
+      { id:"ua1", name:"Elevaciones laterales sentado banco 90°",            sets:4, reps:"15-20", iw:8,    unit:"kg/manc",  type:"aisl" },
+      { id:"ua2", name:"Press inclinado mancuernas banco 30°",               sets:3, reps:"10-12", iw:27.5, unit:"kg/manc",  type:"comp" },
+      { id:"ua3", name:"Jalón al pecho agarre falso prono amplio",           sets:3, reps:"10-12", iw:15,   unit:"discos",   type:"comp" },
+      { id:"ua4", name:"Fondos inclinados lastrados",                       sets:3, reps:"10-12", iw:15,   unit:"kg disco", type:"comp" },
+      { id:"ua5", name:"Remo barra T agarre prono",                         sets:3, reps:"10-12", iw:62.5, unit:"kg total", type:"comp" },
+      { id:"ua6", name:"Press militar mancuernas banco 80°",                 sets:3, reps:"10-12", iw:25,   unit:"kg/manc",  type:"comp" },
+      { id:"ua7", name:"Pájaros mancuernas banco 45° agarre neutro",        sets:3, reps:"15-20", iw:8,    unit:"kg/manc",  type:"aisl" },
+      { id:"ua8", name:"Crunch cuerda polea alta",                          sets:3, reps:"15-20", iw:16,   unit:"discos",   type:"aisl", optional:true },
+    ]
+  },
+  "Lower A": {
+    day: "Miércoles", color: "#4ECDC4",
+    exercises: [
+      { id:"la1", name:"Elevación de gemelos parado barra recta",            sets:4, reps:"15-20", iw:152.5, unit:"kg total", type:"aisl" },
+      { id:"la2", name:"Sentadilla búlgara mancuernas",                            sets:3, reps:"10-12", iw:25,    unit:"kg/manc",  type:"comp" },
+      { id:"la9", name:"Peso muerto rumano mancuernas",                       sets:3, reps:"10-12", iw:25,    unit:"kg/manc",  type:"comp" },
+      { id:"la4", name:"Extensión cuádriceps máquina",                      sets:3, reps:"10-12", iw:11,    unit:"discos",   type:"aisl" },
+      { id:"la3", name:"Curl femoral sentado máquina",                            sets:3, reps:"10-12", iw:15,    unit:"discos",   type:"aisl" },
+      { id:"la6", name:"Curl araña mancuernas banco 45°",                   sets:3, reps:"10-12", iw:17.5,  unit:"kg/manc",  type:"aisl" },
+      { id:"la7", name:"Extensión overhead barra prono banco 60° polea baja",sets:3, reps:"10-12", iw:12,   unit:"discos",   type:"aisl" },
+      { id:"la8", name:"Abducción inclinado máquina",                        sets:3, reps:"10-12", iw:10,    unit:"discos",   type:"aisl", optional:true },
+    ]
+  },
+  "Upper B": {
+    day: "Viernes", color: "#A855F7",
+    exercises: [
+      { id:"ub1", name:"Elevaciones laterales parado bilateral cruzado polea baja", sets:4, reps:"15-20", iw:2,  unit:"discos",   type:"aisl" },
+      { id:"ub2", name:"Press plano mancuernas 0°",                          sets:3, reps:"10-12", iw:27.5, unit:"kg/manc",  type:"comp" },
+      { id:"ub3", name:"Pullover barra recta banco inclinado 45° polea alta", sets:3, reps:"10-12", iw:15,  unit:"discos",   type:"comp" },
+      { id:"ub4", name:"Press militar máquina",                              sets:3, reps:"10-12", iw:65,  unit:"kg máq",   type:"comp" },
+      { id:"ub5", name:"Remo polea baja agarre V neutro amplio",             sets:3, reps:"10-12", iw:16,  unit:"discos",   type:"comp" },
+      { id:"ub6", name:"Cruces inclinado polea baja agarre neutro banco 30°", sets:3, reps:"10-12", iw:4, unit:"discos", type:"aisl" },
+      { id:"ub7", name:"Face pull cuerda agarre neutro polea alta",          sets:3, reps:"15-20", iw:10,  unit:"discos",   type:"aisl" },
+      { id:"ub8", name:"Crunch cuerda polea alta",                          sets:3, reps:"15-20", iw:16,  unit:"discos",   type:"aisl", optional:true },
+    ]
+  },
+  "Lower B": {
+    day: "Sábado", color: "#F59E0B",
+    exercises: [
+      { id:"lb1", name:"Elevación de gemelos sentado barra recta",           sets:4, reps:"15-20", iw:152.5, unit:"kg total", type:"aisl" },
+      { id:"lb9", name:"Peso muerto rumano mancuernas",                       sets:3, reps:"10-12", iw:25,    unit:"kg/manc",  type:"comp" },
+      { id:"lb2", name:"Subidas al cajón mancuernas",                     sets:3, reps:"10-12", iw:25,    unit:"kg/manc",  type:"comp" },
+      { id:"lb3", name:"Curl femoral sentado máquina",                      sets:3, reps:"10-12", iw:15,    unit:"discos",   type:"aisl" },
+      { id:"lb4", name:"Extensión cuádriceps máquina",                       sets:3, reps:"10-12", iw:11,    unit:"discos",   type:"aisl" },
+      { id:"lb6", name:"Curl inclinado mancuernas banco 45°",                sets:3, reps:"10-12", iw:20,    unit:"kg/manc",  type:"aisl" },
+      { id:"lb7", name:"Extensión pushdown barra recta 45° polea alta",      sets:3, reps:"10-12", iw:12,    unit:"discos",   type:"aisl" },
+      { id:"lb8", name:"Aducción máquina",                                   sets:3, reps:"10-12", iw:10,    unit:"discos",   type:"aisl", optional:true },
+    ]
+  }
+};
+
+const DAYS = ["Upper A","Lower A","Upper B","Lower B"];
+
+// ─── INCREMENTO DE SOBRECARGA PROGRESIVA POR UNIDAD ───────────────────
+// Cada unidad de carga sube de a un escalón distinto: kg reales suben de
+// a 2,5 kg; "discos" (pin de polea/máquina selectorizada) sube de a 1;
+// máquinas con lectura en kg suben de a 5 (escalones más grandes típicos).
+const UNIT_INCREMENTS = {
+  "kg/manc": 2.5,
+  "kg total": 2.5,
+  "kg disco": 2.5,
+  "kg máq": 5,
+  "discos": 1,
+};
+
+// Tipos de peso válidos para editar dentro de la app (mismas claves que arriba).
+const VALID_UNITS = Object.keys(UNIT_INCREMENTS);
+
+function incFor(ex) {
+  return UNIT_INCREMENTS[ex.unit] ?? 2.5;
+}
+
+function setsCountFor(ex, deload) {
+  // Descarga: TODOS los ejercicios bajan a 2 series fijas (no sets-1),
+  // según indica el plan ("Reducir a 2 series todos los ejercicios").
+  return deload ? 2 : ex.sets;
+}
+
+function ls(k, def) { try { const v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : def; } catch { return def; } }
+function lss(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+
+function topRep(reps) { const parts = String(reps).split("-"); return parseInt(parts[parts.length-1], 10) || 0; }
+
+// ─── TEMPORIZADOR DE DESCANSO ──────────────────────────────────────────
+// 3 min en compuestos, 2 min en aislados, según el plan.
+function restSecondsFor(ex) {
+  return ex.type === "comp" ? 180 : 120;
+}
+
+function formatMMSS(totalSeconds) {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+// Tono de alarma (sirena ascendente/descendente) generado con Web Audio, sin
+// assets externos — sigue sonando offline. El AudioContext se crea/reanuda en
+// confirmLog (gesto del usuario) y se reutiliza acá; así el sonido de alarma al
+// terminar el descanso no choca con las políticas de autoplay del navegador,
+// que bloquean audio iniciado sin gesto directo. App.js dispara este tono en
+// loop con setInterval hasta que el usuario toca "DETENER".
+function playAlarmTone(ctx) {
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(700, t0);
+    osc.frequency.linearRampToValueAtTime(1100, t0 + 0.25);
+    osc.frequency.linearRampToValueAtTime(700, t0 + 0.5);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.03);
+    gain.gain.setValueAtTime(0.5, t0 + 0.45);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.55);
+  } catch {}
+}
+
+// Aplica una personalización manual (nombre/tipo) sobre el ejercicio base de ROUTINE.
+// Si no hay override para ese id, devuelve la MISMA referencia de ex sin cambios
+// (importante para que el React.memo de ExerciseCard no re-renderice de más).
+function withOverrides(ex, overrides) {
+  const o = overrides[ex.id];
+  return o ? { ...ex, ...o } : ex;
+}
+
+function initWeights() {
+  const w = {};
+  Object.values(ROUTINE).forEach(r => r.exercises.forEach(e => { w[e.id] = e.iw; }));
+  return w;
+}
+
+// ─── VERSIÓN DE RUTINA ────────────────────────────────────────────────
+// Subí este string cada vez que cambies ejercicios, orden, ids o valores
+// iniciales (iw/unit) en ROUTINE. Si no coincide con la guardada, se
+// recalculan los pesos: los ids listados en RESET_ON_VERSION_BUMP vuelven
+// al valor del plan (porque su iw o su unidad cambiaron y el peso guardado
+// ya no tiene sentido), y el resto conserva el progreso de sobrecarga
+// acumulado tal cual estaba. Esto evita perder semanas de progreso en
+// ejercicios que no cambiaron solo por corregir uno o dos puntuales.
+const ROUTINE_VERSION = "2026-06-28";
+
+// Ids que requieren reseteo forzado en esta revisión: cambió el ejercicio y/o
+// la unidad de carga, así que el número guardado quedaría sin sentido bajo la
+// unidad nueva (ej: "ub6" pasó de aperturas con mancuerna a cruces en polea).
+// Curl femoral (la3/lb3) y face pull (ub7) solo subieron el valor base del
+// plan en la misma unidad — eso NO se fuerza, así se conserva la sobrecarga
+// ya acumulada. Las altas (la9/lb9, peso muerto rumano) y bajas (hiperextensión)
+// no necesitan entrada acá: initWeights() ya las resuelve solo.
+const RESET_ON_VERSION_BUMP = ["ub6"];
+
+function loadWeights() {
+  const storedVersion = ls("ft_routine_version", null);
+  const stored = ls("ft_weights", null);
+  if (storedVersion === ROUTINE_VERSION) return stored || initWeights();
+
+  const fresh = initWeights();
+  if (!stored) return fresh;
+
+  const merged = { ...fresh };
+  Object.keys(fresh).forEach(id => {
+    if (!RESET_ON_VERSION_BUMP.includes(id) && typeof stored[id] === "number") {
+      merged[id] = stored[id];
+    }
+  });
+  return merged;
+}
+
+// ─── SET LOG MODAL ────────────────────────────────────────────────────
+function LogModal({ ex, setIdx, color, currentWeight, onConfirm, onClose }) {
+  const [weight, setWeight] = useState(String(currentWeight));
+  const [reps, setReps] = useState("");
+  const repsRef = useRef(null);
+  useEffect(() => { setTimeout(() => repsRef.current?.focus(), 100); }, []);
+
+  const repsNum = parseInt(reps, 10);
+  const repsValid = Number.isInteger(repsNum) && repsNum > 0;
+
+  const confirm = () => { if (!repsValid) return; onConfirm(parseFloat(weight)||0, repsNum); };
+
+  return React.createElement("div", {
+    className:"fade-in",
+    onClick: onClose,
+    role: "dialog",
+    "aria-modal": true,
+    "aria-label": `Registrar serie ${setIdx+1} de ${ex.name}`,
+    style:{ position:"fixed", inset:0, zIndex:200, background:"rgba(0,0,0,0.88)", display:"flex", alignItems:"flex-end", justifyContent:"center" }
+  },
+    React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      className:"slide-up",
+      style:{ background:"#141414", borderRadius:"20px 20px 0 0", padding:"24px 20px 40px",
+        width:"100%", maxWidth:"480px", borderTop:`3px solid ${color}` }
+    },
+      React.createElement("p", { style:{ fontSize:10, color:C.muted, letterSpacing:"0.25em", marginBottom:4 } },
+        `SERIE ${setIdx+1} · ${ex.type === "comp" ? "COMPUESTO" : "AISLADO"}`),
+      React.createElement("p", { style:{ fontSize:13, color:"#ddd", marginBottom:22, lineHeight:1.4 } }, ex.name),
+      React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 } },
+        React.createElement("div", null,
+          React.createElement("label", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.2em", display:"block", marginBottom:6 } }, `PESO (${ex.unit})`),
+          React.createElement("input", {
+            type:"number", value:weight, inputMode:"decimal",
+            onChange: e => setWeight(e.target.value),
+            "aria-label": `Peso en ${ex.unit}`,
+            style:{ width:"100%", padding:"12px 8px", borderRadius:8, fontSize:22,
+              fontFamily:"'Bebas Neue',sans-serif", background:"#1c1c1c",
+              border:`1.5px solid ${color}55`, color:color, textAlign:"center", outline:"none" }
+          })
+        ),
+        React.createElement("div", null,
+          React.createElement("label", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.2em", display:"block", marginBottom:6 } }, `REPS (${ex.reps})`),
+          React.createElement("input", {
+            ref: repsRef, type:"number", value:reps, inputMode:"numeric",
+            onChange: e => setReps(e.target.value),
+            onKeyDown: e => e.key==="Enter" && confirm(),
+            "aria-label": `Repeticiones realizadas, rango objetivo ${ex.reps}`,
+            style:{ width:"100%", padding:"12px 8px", borderRadius:8, fontSize:22,
+              fontFamily:"'Bebas Neue',sans-serif", background:"#1c1c1c",
+              border: reps && !repsValid ? "1.5px solid #f59e0b" : "1.5px solid #2a2a2a", color:"#fff", textAlign:"center", outline:"none" }
+          })
+        )
+      ),
+      React.createElement("button", {
+        onClick: confirm,
+        disabled: !repsValid,
+        "aria-label": "Confirmar serie",
+        style:{ width:"100%", padding:14, borderRadius:10, fontSize:11,
+          letterSpacing:"0.3em", textTransform:"uppercase",
+          background:color, color:"#000", border:"none",
+          cursor: repsValid ? "pointer" : "not-allowed", opacity: repsValid ? 1 : 0.4,
+          fontFamily:"inherit", fontWeight:600, transition:"opacity 0.15s" }
+      }, "CONFIRMAR SERIE")
+    )
+  );
+}
+
+// ─── EXERCISE CARD ────────────────────────────────────────────────────
+const ExerciseCard = React.memo(function ExerciseCard({ ex, color, weight, sessionLog, completedSets, onLogSet, onUndoSet, onEditWeight, onEditName, onToggleType, onEditUnit, deload }) {
+  const sets = setsCountFor(ex, deload);
+  const setsArr = Array.from({ length: sets }, (_, i) => i);
+  const allDone = setsArr.every(i => completedSets[`${ex.id}-${i}`]);
+
+  return React.createElement("div", {
+    style:{
+      background: allDone ? "#0c1a0c" : C.card,
+      border:`1px solid ${allDone ? "#1e3a1e" : C.border}`,
+      borderRadius:12, padding:"13px 14px", transition:"all 0.3s"
+    }
+  },
+    React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 } },
+      React.createElement("div", { style:{ flex:1, paddingRight:10 } },
+        React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:6, marginBottom:4 } },
+          React.createElement("button", {
+            onClick: () => onToggleType(ex),
+            "aria-label": `Tipo: ${ex.type==="comp" ? "compuesto" : "aislado"}. Tocar para cambiar a ${ex.type==="comp" ? "aislado" : "compuesto"}`,
+            style:{ fontSize:8, padding:"2px 6px", borderRadius:4, letterSpacing:"0.1em", border:"none", cursor:"pointer", fontFamily:"inherit",
+              background: ex.type==="comp" ? "#15153a" : "#1a1a1a",
+              color: ex.type==="comp" ? "#6B8EFF" : C.muted }
+          }, ex.type==="comp" ? "COMPUESTO" : "AISLADO"),
+          ex.optional && React.createElement("span", {
+            style:{ fontSize:8, padding:"2px 6px", borderRadius:4, letterSpacing:"0.1em",
+              background:"#1a1505", color:"#caa23a" }
+          }, "OPCIONAL"),
+          allDone && React.createElement("span", { style:{ fontSize:11, color:"#4ade80" } }, "✓")
+        ),
+        React.createElement("button", {
+          onClick: () => onEditName(ex),
+          "aria-label": `Editar nombre de ${ex.name}`,
+          style:{ display:"flex", alignItems:"baseline", gap:5, background:"none", border:"none", padding:0,
+            textAlign:"left", cursor:"pointer", fontFamily:"inherit", width:"100%" }
+        },
+          React.createElement("p", { style:{ fontSize:12, color: allDone ? "#4ade80" : "#ccc", lineHeight:1.4 } }, ex.name),
+          React.createElement("span", { style:{ fontSize:9, color:"#444", flexShrink:0 } }, "✎")
+        )
+      ),
+      React.createElement("div", { style:{ textAlign:"right", flexShrink:0, display:"flex", flexDirection:"column", alignItems:"flex-end" } },
+        React.createElement("button", {
+          onClick: () => onEditWeight(ex),
+          "aria-label": `Editar peso de ${ex.name}, actual ${weight} ${ex.unit}`,
+          style:{ background:"none", border:"none", padding:0,
+            cursor:"pointer", display:"flex", alignItems:"baseline", gap:4, fontFamily:"inherit" }
+        },
+          React.createElement("p", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color, lineHeight:1 } }, weight),
+          React.createElement("span", { style:{ fontSize:9, color:"#444" } }, "✎")
+        ),
+        React.createElement("button", {
+          onClick: () => onEditUnit(ex),
+          "aria-label": `Editar tipo de peso de ${ex.name}, actual ${ex.unit}`,
+          style:{ background:"none", border:"none", padding:0, marginTop:1,
+            cursor:"pointer", display:"flex", alignItems:"center", gap:3, fontFamily:"inherit" }
+        },
+          React.createElement("span", { style:{ fontSize:8, color:"#3a3a3a", letterSpacing:"0.1em" } }, ex.unit),
+          React.createElement("span", { style:{ fontSize:7, color:"#333" } }, "✎")
+        )
+      )
+    ),
+    React.createElement("div", { style:{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" } },
+      React.createElement("span", { style:{ fontSize:9, color:"#3a3a3a", letterSpacing:"0.12em" } }, ex.reps+" rep"),
+      ...setsArr.map(i => {
+        const key = `${ex.id}-${i}`;
+        const done = completedSets[key];
+        const logData = sessionLog[key];
+        return React.createElement("button", {
+          key:i,
+          onClick: () => done ? onUndoSet(ex.id, i) : onLogSet(ex, i),
+          "aria-label": done
+            ? `Deshacer serie ${i+1} de ${ex.name}, registrada con ${logData?.reps} repeticiones y ${logData?.weight} ${ex.unit}`
+            : `Registrar serie ${i+1} de ${ex.name}`,
+          style:{
+            width:46, height:38, borderRadius:7, fontSize:9,
+            border: done ? "none" : `1px solid #252525`,
+            background: done ? color : "#181818",
+            color: done ? "#000" : C.muted, cursor:"pointer",
+            display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+            lineHeight:1.2, fontFamily:"inherit", transition:"all 0.15s"
+          }
+        },
+          done
+            ? [React.createElement("span", { key:"r", style:{ fontSize:11, fontWeight:600 } }, logData?.reps),
+               React.createElement("span", { key:"w", style:{ fontSize:7 } }, logData?.weight)]
+            : React.createElement("span", { key:"s", style:{ letterSpacing:"0.1em" } }, `S${i+1}`)
+        );
+      }),
+      React.createElement("span", { style:{ fontSize:9, color:"#2a2a2a", marginLeft:"auto" } },
+        ex.type==="comp" ? "3' desc" : "2' desc"
+      )
+    )
+  );
+}, (prev, next) => {
+  if (prev.ex !== next.ex || prev.color !== next.color || prev.weight !== next.weight || prev.deload !== next.deload) return false;
+  if (prev.onLogSet !== next.onLogSet || prev.onUndoSet !== next.onUndoSet || prev.onEditWeight !== next.onEditWeight) return false;
+  if (prev.onEditName !== next.onEditName || prev.onToggleType !== next.onToggleType || prev.onEditUnit !== next.onEditUnit) return false;
+  const sets = setsCountFor(next.ex, next.deload);
+  for (let i = 0; i < sets; i++) {
+    const k = `${next.ex.id}-${i}`;
+    if (!!prev.completedSets[k] !== !!next.completedSets[k]) return false;
+    const a = prev.sessionLog[k], b = next.sessionLog[k];
+    if ((a && a.reps) !== (b && b.reps)) return false;
+    if ((a && a.weight) !== (b && b.weight)) return false;
+  }
+  return true;
+});
+
+// ─── REST TIMER BAR ─────────────────────────────────────────────────────
+function RestTimerBar({ remainingSec, totalSec, color, onSkip, onAddTime }) {
+  const pct = totalSec > 0 ? Math.max(0, Math.min(100, (remainingSec/totalSec)*100)) : 0;
+  return React.createElement("div", {
+    className:"fade-in",
+    style:{ width:"100%", maxWidth:480, padding:"10px 16px 0" }
+  },
+    React.createElement("div", { style:{ height:3, background:"#181818", borderRadius:2, marginBottom:10, overflow:"hidden" } },
+      React.createElement("div", { style:{ height:"100%", width:`${pct}%`, background:color, borderRadius:2, transition:"width 0.25s linear" } })
+    ),
+    React.createElement("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingBottom:10 } },
+      React.createElement("div", { style:{ display:"flex", alignItems:"baseline", gap:8 } },
+        React.createElement("span", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.25em" } }, "DESCANSO"),
+        React.createElement("span", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color, lineHeight:1 } }, formatMMSS(remainingSec))
+      ),
+      React.createElement("div", { style:{ display:"flex", gap:6 } },
+        React.createElement("button", {
+          onClick: onAddTime,
+          "aria-label": "Agregar 30 segundos de descanso",
+          style:{ fontSize:9, letterSpacing:"0.1em", color:"#aaa", cursor:"pointer",
+            border:"1px solid #2a2a2a", borderRadius:6, padding:"6px 10px", background:"none", fontFamily:"inherit" }
+        }, "+30s"),
+        React.createElement("button", {
+          onClick: onSkip,
+          "aria-label": "Saltar descanso",
+          style:{ fontSize:9, letterSpacing:"0.1em", color:"#aaa", cursor:"pointer",
+            border:"1px solid #2a2a2a", borderRadius:6, padding:"6px 10px", background:"none", fontFamily:"inherit" }
+        }, "SALTAR")
+      )
+    )
+  );
+}
+
+// ─── ALARMA DE FIN DE DESCANSO ──────────────────────────────────────────
+// Pantalla completa, sin cierre por backdrop: solo se corta con el botón,
+// tal como se pidió ("hasta que toque un botón para que se corte la música").
+function AlarmOverlay({ onStop }) {
+  return React.createElement("div", {
+    className:"fade-in",
+    role:"alertdialog",
+    "aria-modal": true,
+    "aria-label": "Descanso terminado, tocar para detener el sonido",
+    style:{ position:"fixed", inset:0, zIndex:400, background:"rgba(0,0,0,0.93)",
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:22, padding:24 }
+  },
+    React.createElement("p", { style:{ fontSize:46, lineHeight:1 } }, "⏰"),
+    React.createElement("p", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:30, color:"#fff",
+      letterSpacing:"0.05em", textAlign:"center", lineHeight:1.1 } }, "DESCANSO", React.createElement("br"), "TERMINADO"),
+    React.createElement("p", { style:{ fontSize:10, color:"#777", letterSpacing:"0.15em" } }, "TOCÁ PARA DETENER EL SONIDO"),
+    React.createElement("button", {
+      onClick: onStop,
+      "aria-label": "Detener sonido de alarma",
+      style:{ padding:"18px 44px", borderRadius:14, fontSize:13, letterSpacing:"0.3em",
+        textTransform:"uppercase", background:"#fff", color:"#000", border:"none",
+        cursor:"pointer", fontFamily:"inherit", fontWeight:700 }
+    }, "DETENER")
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState("workout");
+  const [weights, setWeights] = useState(loadWeights);
+  const [history, setHistory] = useState(() => ls("ft_history", {}));
+  const [weekNum, setWeekNum] = useState(() => ls("ft_week", 1));
+  const [activeDay, setActiveDay] = useState(() => ls("ft_session", null)?.activeDay || "Upper A");
+  const [sessionLog, setSessionLog] = useState(() => ls("ft_session", null)?.sessionLog || {});
+  const [completedSets, setCompletedSets] = useState(() => ls("ft_session", null)?.completedSets || {});
+  // Personalizaciones manuales por ejercicio: nombre y/o tipo (comp/aisl), guardadas
+  // aparte de ROUTINE para que editar dentro de la app no requiera tocar código.
+  // Forma: { [exerciseId]: { name?: string, type?: "comp" | "aisl" } }
+  const [overrides, setOverrides] = useState(() => ls("ft_overrides", {}));
+  // Temporizador de descanso: { endTime, duration } en ms epoch / segundos.
+  // Si el guardado ya venció (app cerrada más tiempo del descanso), se descarta
+  // en silencio acá para no disparar el aviso de "descanso terminado" al abrir.
+  const [restTimer, setRestTimer] = useState(() => {
+    const stored = ls("ft_rest_timer", null);
+    return stored && stored.endTime > Date.now() ? stored : null;
+  });
+  const [now, setNow] = useState(Date.now());
+  const audioCtxRef = useRef(null);
+  // Alarma de fin de descanso: queda sonando en loop hasta que se toca "DETENER".
+  const [alarmActive, setAlarmActive] = useState(false);
+  const alarmIntervalRef = useRef(null);
+  const [logging, setLogging] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((msg, type="ok") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  const storageWarnedRef = useRef(false);
+  const persistOrWarn = useCallback((ok, msg) => {
+    if (!ok) {
+      if (!storageWarnedRef.current) { storageWarnedRef.current = true; showToast(msg, "warn"); }
+    } else {
+      storageWarnedRef.current = false;
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    const ok = lss("ft_weights", weights) && lss("ft_routine_version", ROUTINE_VERSION);
+    persistOrWarn(ok, "⚠️ No se pudo guardar el progreso (¿modo privado o memoria llena?)");
+  }, [weights, persistOrWarn]);
+
+  useEffect(() => {
+    persistOrWarn(lss("ft_history", history), "⚠️ No se pudo guardar el historial");
+  }, [history, persistOrWarn]);
+
+  useEffect(() => {
+    persistOrWarn(lss("ft_overrides", overrides), "⚠️ No se pudo guardar las personalizaciones de ejercicios");
+  }, [overrides, persistOrWarn]);
+
+  useEffect(() => { lss("ft_week", weekNum); }, [weekNum]);
+
+  useEffect(() => {
+    persistOrWarn(lss("ft_session", { activeDay, sessionLog, completedSets }), "⚠️ No se pudo guardar la sesión en curso");
+  }, [activeDay, sessionLog, completedSets, persistOrWarn]);
+
+  useEffect(() => { lss("ft_rest_timer", restTimer); }, [restTimer]);
+
+  // Mientras hay un descanso activo, refresca "now" cada 250ms para la cuenta
+  // regresiva. Al volver de background/pantalla bloqueada (visibilitychange),
+  // recalcula al toque: el tiempo restante se basa en endTime absoluto, así que
+  // no importa si setInterval estuvo pausado mientras el teléfono estaba bloqueado.
+  useEffect(() => {
+    if (!restTimer) return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [restTimer]);
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") setNow(Date.now()); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  const startAlarmLoop = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    const ring = () => {
+      if (navigator.vibrate) navigator.vibrate(250);
+      playAlarmTone(ctx);
+    };
+    ring();
+    if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
+    alarmIntervalRef.current = setInterval(ring, 700);
+    setAlarmActive(true);
+  }, []);
+
+  const stopAlarm = useCallback(() => {
+    if (alarmIntervalRef.current) { clearInterval(alarmIntervalRef.current); alarmIntervalRef.current = null; }
+    setAlarmActive(false);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current); };
+  }, []);
+
+  useEffect(() => {
+    if (!restTimer) return;
+    if (Date.now() >= restTimer.endTime) {
+      setRestTimer(null);
+      startAlarmLoop();
+    }
+  }, [restTimer, now, startAlarmLoop]);
+
+  const remainingSec = restTimer ? Math.max(0, (restTimer.endTime - now) / 1000) : 0;
+
+  const ensureAudioCtx = useCallback(() => {
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+  }, []);
+
+  const startRestTimer = useCallback((ex) => {
+    const duration = restSecondsFor(ex);
+    setRestTimer({ endTime: Date.now() + duration*1000, duration });
+  }, []);
+
+  const handleSkipRest = useCallback(() => setRestTimer(null), []);
+  const handleAddRestTime = useCallback(() => {
+    setRestTimer(prev => prev ? { ...prev, endTime: prev.endTime + 30000, duration: prev.duration + 30 } : prev);
+  }, []);
+
+  const weightsRef = useRef(weights);
+  useEffect(() => { weightsRef.current = weights; }, [weights]);
+
+  const isDeload = weekNum % 6 === 0;
+  const dayColor = ROUTINE[activeDay].color;
+  const exercises = useMemo(
+    () => ROUTINE[activeDay].exercises.map(ex => withOverrides(ex, overrides)),
+    [activeDay, overrides]
+  );
+
+  const requiredExercises = exercises.filter(e => !e.optional);
+  const allSets = requiredExercises.reduce((a,e) => a + setsCountFor(e, isDeload), 0);
+  // Solo cuenta series dentro del rango vigente de setsCountFor: si veníamos de una
+  // semana normal con la serie 4 marcada y entramos en descarga (que solo muestra
+  // 2-3 series), esa serie 4 ya no debe sumar o el % se va por encima de 100.
+  const doneSets = requiredExercises.reduce((sum, e) => {
+    const setsForEx = setsCountFor(e, isDeload);
+    let count = 0;
+    for (let i = 0; i < setsForEx; i++) {
+      if (completedSets[`${e.id}-${i}`]) count++;
+    }
+    return sum + count;
+  }, 0);
+  const pct = allSets > 0 ? Math.round(doneSets/allSets*100) : 0;
+
+  const handleLogSet = useCallback((ex, setIdx) => {
+    setLogging({ ex, setIdx, exId: ex.id });
+  }, []);
+
+  const handleUndoSet = useCallback((exId, setIdx) => {
+    const key = `${exId}-${setIdx}`;
+    setCompletedSets(prev => { if (!(key in prev)) return prev; const n = { ...prev }; delete n[key]; return n; });
+    setSessionLog(prev => { if (!(key in prev)) return prev; const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+
+  const handleEditWeight = useCallback((ex) => {
+    const current = weightsRef.current[ex.id];
+    const input = window.prompt(`Nuevo peso — ${ex.name} (${ex.unit})`, current);
+    if (input === null) return;
+    const val = parseFloat(String(input).replace(",", "."));
+    if (!Number.isFinite(val) || val < 0) { showToast("⚠️ Peso inválido", "warn"); return; }
+    const rounded = Math.round(val * 100) / 100;
+    setWeights(prev => ({ ...prev, [ex.id]: rounded }));
+    showToast(`✎ Peso actualizado: ${rounded} ${ex.unit}`);
+  }, [showToast]);
+
+  const handleEditName = useCallback((ex) => {
+    const input = window.prompt(`Nuevo nombre del ejercicio`, ex.name);
+    if (input === null) return;
+    const trimmed = input.trim();
+    if (!trimmed) { showToast("⚠️ El nombre no puede quedar vacío", "warn"); return; }
+    setOverrides(prev => ({ ...prev, [ex.id]: { ...prev[ex.id], name: trimmed } }));
+    showToast(`✎ Nombre actualizado`);
+  }, [showToast]);
+
+  const handleToggleType = useCallback((ex) => {
+    const next = ex.type === "comp" ? "aisl" : "comp";
+    setOverrides(prev => ({ ...prev, [ex.id]: { ...prev[ex.id], type: next } }));
+    showToast(`✎ Tipo actualizado: ${next === "comp" ? "Compuesto" : "Aislado"}`);
+  }, [showToast]);
+
+  const handleEditUnit = useCallback((ex) => {
+    const input = window.prompt(`Tipo de peso — opciones: ${VALID_UNITS.join(" / ")}`, ex.unit);
+    if (input === null) return;
+    const trimmed = input.trim();
+    const match = VALID_UNITS.find(u => u.toLowerCase() === trimmed.toLowerCase());
+    if (!match) { showToast(`⚠️ Tipo inválido. Usá: ${VALID_UNITS.join(" / ")}`, "warn"); return; }
+
+    setOverrides(prev => ({ ...prev, [ex.id]: { ...prev[ex.id], unit: match } }));
+
+    // Si cambia la unidad, el número guardado deja de tener sentido en la
+    // escala nueva (ej: "14 discos" no es lo mismo que "14 kg/manc"), así que
+    // de una se pide el peso correspondiente en la unidad nueva.
+    if (match !== ex.unit) {
+      const current = weightsRef.current[ex.id];
+      const weightInput = window.prompt(`Peso actual en ${match}`, current);
+      if (weightInput !== null) {
+        const val = parseFloat(String(weightInput).replace(",", "."));
+        if (Number.isFinite(val) && val >= 0) {
+          setWeights(prev => ({ ...prev, [ex.id]: Math.round(val * 100) / 100 }));
+        }
+      }
+    }
+    showToast(`✎ Tipo de peso actualizado: ${match}`);
+  }, [showToast]);
+
+  const confirmLog = (weight, reps) => {
+    if (!logging) return;
+    const repsNum = Math.trunc(reps);
+    if (!Number.isFinite(repsNum) || repsNum <= 0) { showToast("⚠️ Ingresá una cantidad de reps válida", "warn"); return; }
+
+    const key = `${logging.exId}-${logging.setIdx}`;
+    setSessionLog(prev => ({ ...prev, [key]: { weight, reps: repsNum } }));
+    setCompletedSets(prev => ({ ...prev, [key]: true }));
+
+    if (logging.setIdx === 0 && repsNum >= topRep(logging.ex.reps)) {
+      const inc = incFor(logging.ex);
+      if (inc > 0) {
+        const newW = parseFloat((weight + inc).toFixed(2));
+        setWeights(prev => ({ ...prev, [logging.exId]: newW }));
+        showToast(`💪 ¡Sobrecarga! Nuevo peso: ${newW} ${logging.ex.unit}`, "progress");
+      }
+    }
+
+    // El gesto de "Confirmar serie" es lo que desbloquea el AudioContext para
+    // que el beep de fin de descanso pueda sonar más tarde sin gesto directo.
+    ensureAudioCtx();
+    startRestTimer(logging.ex);
+    setLogging(null);
+  };
+
+  const HISTORY_LIMIT = 100;
+
+  const finishWorkout = () => {
+    if (Object.keys(sessionLog).length === 0) {
+      showToast("⚠️ Registrá al menos una serie antes de guardar", "warn");
+      return;
+    }
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const entry = { date: new Date().toLocaleDateString("es-AR"), day: activeDay, log: {...sessionLog}, savedAt: Date.now() };
+    setHistory(prev => {
+      const next = { ...prev, [id]: entry };
+      const entries = Object.entries(next).sort((a,b) => (b[1].savedAt||0) - (a[1].savedAt||0));
+      // Poda a las HISTORY_LIMIT sesiones más recientes para que localStorage
+      // no crezca sin límite con el uso diario de la PWA.
+      if (entries.length <= HISTORY_LIMIT) return next;
+      return Object.fromEntries(entries.slice(0, HISTORY_LIMIT));
+    });
+    setSessionLog({});
+    setCompletedSets({});
+    setRestTimer(null);
+    showToast("✅ Entrenamiento guardado");
+  };
+
+  const changeDay = d => { setActiveDay(d); setSessionLog({}); setCompletedSets({}); setRestTimer(null); };
+
+  const resetWeightsToPlan = () => {
+    if (!confirm("¿Restablecer todos los pesos a los valores iniciales del plan? Se pierde el progreso de sobrecarga acumulado.")) return;
+    setWeights(initWeights());
+    showToast("↺ Pesos restablecidos al plan original");
+  };
+
+  const resetOverridesToPlan = () => {
+    if (!confirm("¿Restablecer nombres y tipos (compuesto/aislado) a los valores originales del plan?")) return;
+    setOverrides({});
+    showToast("↺ Nombres y tipos restablecidos al plan original");
+  };
+
+  const histEntries = useMemo(() =>
+    Object.entries(history).sort((a,b) => (b[1].savedAt||0) - (a[1].savedAt||0)).slice(0,30),
+    [history]
+  );
+
+  return React.createElement("div", {
+    style:{ minHeight:"100vh", background:C.bg, position:"relative", overflow:"hidden" }
+  },
+    // BG grid
+    React.createElement("div", { style:{
+      position:"fixed", inset:0, zIndex:0,
+      backgroundImage:`linear-gradient(rgba(255,255,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.018) 1px,transparent 1px)`,
+      backgroundSize:"40px 40px", pointerEvents:"none"
+    }}),
+    // Accent glow
+    React.createElement("div", { style:{
+      position:"fixed", top:-120, right:-120, width:380, height:380,
+      background:`radial-gradient(circle,${dayColor}1a 0%,transparent 70%)`,
+      zIndex:0, transition:"background 0.5s", pointerEvents:"none"
+    }}),
+
+    // Scrollable content
+    React.createElement("div", {
+      style:{ position:"relative", zIndex:1, maxWidth:480, margin:"0 auto",
+        padding:`env(safe-area-inset-top,16px) 16px ${restTimer ? 180 : 120}px`, minHeight:"100vh", overflowY:"auto" }
+    },
+
+      // ── HEADER ──
+      React.createElement("div", { style:{ marginBottom:22, paddingTop:8 } },
+        React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" } },
+          React.createElement("div", null,
+            React.createElement("p", { style:{ fontSize:9, letterSpacing:"0.35em", color:C.muted, textTransform:"uppercase", marginBottom:3 } },
+              `SEMANA ${weekNum}${isDeload ? " · 🔄 DESCARGA" : ""}`
+            ),
+            React.createElement("h1", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:40, letterSpacing:"0.05em", color:"#fff", lineHeight:1 } },
+              "PROGRESS",
+              React.createElement("br"),
+              React.createElement("span", { style:{ color:dayColor } }, "TRACKER")
+            )
+          ),
+          React.createElement("div", { style:{ textAlign:"right" } },
+            React.createElement("p", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.2em" } }, "HOY"),
+            React.createElement("p", { style:{ fontSize:12, color:"#777", marginBottom:6 } },
+              new Date().toLocaleDateString("es-AR",{ weekday:"short", day:"numeric", month:"short" })
+            ),
+            React.createElement("div", { style:{ display:"flex", gap:5, justifyContent:"flex-end" } },
+              React.createElement("button", {
+                onClick: () => setWeekNum(w => Math.max(1, w-1)),
+                "aria-label": "Semana anterior",
+                style:{ fontSize:9, letterSpacing:"0.12em", color:C.muted, cursor:"pointer",
+                  border:"1px solid #2a2a2a", borderRadius:4, padding:"3px 8px", background:"none",
+                  fontFamily:"inherit" }
+              }, "− SEMANA"),
+              React.createElement("button", {
+                onClick: () => setWeekNum(w => w+1),
+                "aria-label": "Semana siguiente",
+                style:{ fontSize:9, letterSpacing:"0.12em", color:C.muted, cursor:"pointer",
+                  border:"1px solid #2a2a2a", borderRadius:4, padding:"3px 8px", background:"none",
+                  fontFamily:"inherit" }
+              }, "+ SEMANA")
+            )
+          )
+        )
+      ),
+
+      // ── TABS ──
+      React.createElement("div", { style:{ display:"flex", gap:4, marginBottom:18, background:"#0f0f0f", borderRadius:10, padding:4 } },
+        ...[["workout","Sesión"],["history","Historial"],["overview","Overview"]].map(([v,l]) =>
+          React.createElement("button", {
+            key:v, onClick: () => setTab(v),
+            "aria-label": `Ver pestaña ${l}`,
+            style:{ flex:1, padding:"8px 0", fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase",
+              color: tab===v ? "#000" : C.muted,
+              background: tab===v ? "#fff" : "none",
+              borderRadius:7, border:"none", fontFamily:"inherit", cursor:"pointer", transition:"all 0.2s" }
+          }, l)
+        )
+      ),
+
+      // ══ WORKOUT TAB ══
+      tab==="workout" && React.createElement("div", { className:"fade-in" },
+        // Day selector
+        React.createElement("div", { style:{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:7, marginBottom:18 } },
+          ...DAYS.map(d => {
+            const info = ROUTINE[d];
+            const active = activeDay===d;
+            return React.createElement("button", {
+              key:d, onClick: () => changeDay(d),
+              "aria-label": `Cambiar a ${d}`,
+              style:{ padding:"14px 4px", borderRadius:10, textAlign:"center",
+                background: active ? info.color : "#0f0f0f",
+                border: active ? "none" : "1px solid #181818",
+                color: active ? "#000" : C.muted, cursor:"pointer", transition:"all 0.2s",
+                fontFamily:"inherit" }
+            },
+              React.createElement("div", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:14, letterSpacing:"0.04em" } }, d)
+            );
+          })
+        ),
+
+        // Progress bar
+        React.createElement("div", { style:{ marginBottom:18 } },
+          React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:5 } },
+            React.createElement("span", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.2em" } }, "PROGRESO SESIÓN"),
+            React.createElement("span", { style:{ fontSize:9, color:dayColor } }, `${doneSets}/${allSets} SERIES · ${pct}%`)
+          ),
+          React.createElement("div", { style:{ height:3, background:"#181818", borderRadius:2 } },
+            React.createElement("div", { style:{ height:"100%", width:`${pct}%`, background:dayColor, borderRadius:2, transition:"width 0.5s ease" } })
+          )
+        ),
+
+        // Exercises
+        React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:9, marginBottom:16 } },
+          ...exercises.map((ex, idx) =>
+            React.createElement("div", { key:ex.id, className:"slide-up", style:{ animationDelay:`${idx*0.04}s` } },
+              React.createElement(ExerciseCard, {
+                ex, color:dayColor, weight:weights[ex.id],
+                sessionLog, completedSets,
+                onLogSet:handleLogSet, onUndoSet:handleUndoSet, onEditWeight:handleEditWeight,
+                onEditName:handleEditName, onToggleType:handleToggleType, onEditUnit:handleEditUnit,
+                deload:isDeload
+              })
+            )
+          )
+        ),
+
+        // Finish button
+        doneSets > 0 && React.createElement("button", {
+          onClick: finishWorkout,
+          "aria-label": `Guardar entrenamiento, ${pct} por ciento completado`,
+          style:{ width:"100%", padding:15, borderRadius:12, fontSize:11,
+            letterSpacing:"0.3em", textTransform:"uppercase",
+            background:dayColor, color:"#000", border:"none", cursor:"pointer",
+            fontFamily:"inherit", fontWeight:600 }
+        }, `GUARDAR ENTRENAMIENTO · ${pct}%`)
+      ),
+
+      // ══ HISTORY TAB ══
+      tab==="history" && React.createElement("div", { className:"fade-in" },
+        React.createElement("p", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.25em", marginBottom:14 } },
+          `ÚLTIMAS SESIONES — ${histEntries.length} REGISTROS`
+        ),
+        histEntries.length===0 && React.createElement("div", { style:{ textAlign:"center", padding:"60px 0", color:"#2a2a2a" } },
+          React.createElement("p", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:36 } }, "SIN DATOS"),
+          React.createElement("p", { style:{ fontSize:11, marginTop:8 } }, "Completá tu primera sesión")
+        ),
+        ...histEntries.map(([id, e]) => {
+          const dc = ROUTINE[e.day]?.color || C.muted;
+          const logs = Object.entries(e.log||{});
+          return React.createElement("div", {
+            key:id,
+            style:{ background:C.card, border:`1px solid ${C.border}`, borderLeft:`3px solid ${dc}`,
+              borderRadius:12, padding:14, marginBottom:9 }
+          },
+            React.createElement("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:9 } },
+              React.createElement("div", null,
+                React.createElement("p", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:18, color:dc, lineHeight:1 } }, e.day),
+                React.createElement("p", { style:{ fontSize:10, color:C.muted, marginTop:2 } }, e.date)
+              ),
+              React.createElement("div", { style:{ textAlign:"right" } },
+                React.createElement("p", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:"#fff", lineHeight:1 } }, logs.length),
+                React.createElement("p", { style:{ fontSize:8, color:"#3a3a3a" } }, "SERIES")
+              )
+            ),
+            React.createElement("div", { style:{ display:"flex", flexWrap:"wrap", gap:4 } },
+              ...logs.slice(0,8).map(([k,v]) =>
+                React.createElement("span", { key:k, style:{ fontSize:9, padding:"3px 7px", borderRadius:5, background:"#181818", color:"#666" } },
+                  `${v.reps}r×${v.weight}`)
+              ),
+              logs.length>8 && React.createElement("span", { key:"more", style:{ fontSize:9, color:"#333" } }, `+${logs.length-8}`)
+            )
+          );
+        }),
+        histEntries.length>0 && React.createElement("button", {
+          onClick: () => { if(confirm("¿Borrar todo el historial?")) setHistory({}); },
+          "aria-label": "Borrar todo el historial de entrenamientos",
+          style:{ marginTop:10, width:"100%", padding:10, borderRadius:8,
+            background:"none", border:"1px solid #2a1a1a", color:"#555",
+            fontSize:9, letterSpacing:"0.2em", cursor:"pointer", fontFamily:"inherit" }
+        }, "BORRAR HISTORIAL")
+      ),
+
+      // ══ OVERVIEW TAB ══
+      tab==="overview" && React.createElement("div", { className:"fade-in" },
+        ...DAYS.map(d => {
+          const info = ROUTINE[d];
+          return React.createElement("div", { key:d, style:{ marginBottom:18 } },
+            React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:7, marginBottom:8 } },
+              React.createElement("div", { style:{ width:7, height:7, borderRadius:"50%", background:info.color } }),
+              React.createElement("p", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:15, color:info.color, letterSpacing:"0.08em" } },
+                d)
+            ),
+            React.createElement("div", { style:{ display:"flex", flexDirection:"column", gap:4 } },
+              ...info.exercises.map(ex0 => {
+                const ex = withOverrides(ex0, overrides);
+                const cur = weights[ex.id];
+                const gained = parseFloat((cur - ex.iw).toFixed(1));
+                return React.createElement("div", { key:ex.id,
+                  style:{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                    background:C.card, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px" }
+                },
+                  React.createElement("p", { style:{ fontSize:11, color:"#777", flex:1 } }, ex.name),
+                  React.createElement("div", { style:{ display:"flex", alignItems:"center", gap:8, flexShrink:0 } },
+                    gained>0 && React.createElement("span", { style:{ fontSize:9, color:"#4ade80" } }, `+${gained}`),
+                    React.createElement("span", { style:{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:info.color } }, cur),
+                    React.createElement("span", { style:{ fontSize:8, color:"#2a2a2a", width:42 } }, ex.unit)
+                  )
+                );
+              })
+            )
+          );
+        }),
+
+        React.createElement("div", { style:{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginTop:4 } },
+          React.createElement("p", { style:{ fontSize:9, color:C.muted, letterSpacing:"0.25em", marginBottom:10 } }, "PARÁMETROS"),
+          ...[
+            ["Técnica","3s bajar · 1s subir"],
+            ["RIR","1-2 primeras · 0-1 última"],
+            ["Compuestos","3 min descanso"],
+            ["Aislados","2 min descanso"],
+            ["Progresión","+2.5kg / +1 disco / +5 máq al llegar tope rango S1, RIR 0"],
+            ["Descarga","Cada 6 semanas (2 series)"],
+            ["Semana",`#${weekNum}${isDeload?" ← DESCARGA":""}`],
+          ].map(([k,v]) =>
+            React.createElement("div", { key:k,
+              style:{ display:"flex", justifyContent:"space-between", paddingBottom:7,
+                borderBottom:`1px solid #141414`, marginBottom:7 }
+            },
+              React.createElement("span", { style:{ fontSize:10, color:"#3a3a3a" } }, k),
+              React.createElement("span", { style:{ fontSize:10, color: isDeload&&k==="Semana" ? "#F59E0B" : "#777" } }, v)
+            )
+          )
+        ),
+
+        React.createElement("button", {
+          onClick: resetWeightsToPlan,
+          "aria-label": "Restablecer todos los pesos a los valores iniciales del plan",
+          style:{ marginTop:10, width:"100%", padding:10, borderRadius:8,
+            background:"none", border:"1px solid #2a1a1a", color:"#555",
+            fontSize:9, letterSpacing:"0.2em", cursor:"pointer", fontFamily:"inherit" }
+        }, "↺ RESTABLECER PESOS AL PLAN"),
+
+        React.createElement("button", {
+          onClick: resetOverridesToPlan,
+          "aria-label": "Restablecer nombres y tipos de ejercicio a los valores originales del plan",
+          style:{ marginTop:8, width:"100%", padding:10, borderRadius:8,
+            background:"none", border:"1px solid #2a1a1a", color:"#555",
+            fontSize:9, letterSpacing:"0.2em", cursor:"pointer", fontFamily:"inherit" }
+        }, "↺ RESTABLECER NOMBRES/TIPOS AL PLAN")
+      )
+    ),
+
+    // ── BOTTOM NAV BAR ──
+    React.createElement("div", { style:{
+      position:"fixed", bottom:0, left:0, right:0, zIndex:50,
+      background:"rgba(10,10,15,0.95)", backdropFilter:"blur(16px)",
+      borderTop:`1px solid ${C.border}`,
+      paddingBottom:"env(safe-area-inset-bottom,8px)",
+      display:"flex", flexDirection:"column", alignItems:"center"
+    }},
+      restTimer && React.createElement(RestTimerBar, {
+        remainingSec, totalSec: restTimer.duration, color: dayColor,
+        onSkip: handleSkipRest, onAddTime: handleAddRestTime
+      }),
+      React.createElement("div", { style:{ display:"flex", width:"100%", maxWidth:480 } },
+        ...[["workout","💪","Sesión"],["history","📋","Historial"],["overview","📊","Overview"]].map(([v,icon,l]) =>
+          React.createElement("button", {
+            key:v, onClick: () => setTab(v),
+            "aria-label": `Ir a ${l}`,
+            style:{ flex:1, padding:"10px 0 8px", border:"none", background:"none",
+              cursor:"pointer", fontFamily:"inherit", display:"flex", flexDirection:"column",
+              alignItems:"center", gap:3 }
+          },
+            React.createElement("span", { style:{ fontSize:18 } }, icon),
+            React.createElement("span", { style:{ fontSize:9, letterSpacing:"0.15em", color: tab===v ? dayColor : C.muted } }, l)
+          )
+        )
+      )
+    ),
+
+    // ── ALARMA DE FIN DE DESCANSO ──
+    alarmActive && React.createElement(AlarmOverlay, { onStop: stopAlarm }),
+
+    // ── LOG MODAL ──
+    logging && React.createElement(LogModal, {
+      ex: logging.ex, setIdx: logging.setIdx,
+      color: dayColor, currentWeight: weights[logging.exId],
+      onConfirm: confirmLog, onClose: () => setLogging(null)
+    }),
+
+    // ── TOAST ──
+    toast && React.createElement("div", {
+      className:"toast-anim",
+      role:"status",
+      "aria-live":"polite",
+      style:{
+        position:"fixed", bottom:90, right:14, zIndex:300,
+        background: toast.type==="progress" ? "#0d1f0d" : toast.type==="warn" ? "#1f1408" : "#12121f",
+        border:`1px solid ${toast.type==="progress" ? "#4ade80" : toast.type==="warn" ? "#f59e0b" : "#6B8EFF"}`,
+        borderRadius:10, padding:"11px 14px", maxWidth:260,
+        fontSize:11, color: toast.type==="progress" ? "#4ade80" : toast.type==="warn" ? "#f59e0b" : "#aaa", lineHeight:1.4
+      }
+    }, toast.msg)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
