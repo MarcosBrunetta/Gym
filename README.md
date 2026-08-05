@@ -1,1 +1,1 @@
-# Arnold Split
+# Gym
